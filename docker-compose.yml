@@ -1,0 +1,18 @@
+x-project-service: &project-service
+  restart: no
+  volumes:
+    - project_logs:/logs
+
+services:
+  project:
+    <<: *project-service
+    container_name: project
+    image: project
+
+  project_dev:
+    <<: *project-service
+    container_name: project_dev
+    image: project-dev
+
+volumes:
+  project_logs:
