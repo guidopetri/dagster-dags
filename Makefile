@@ -10,6 +10,11 @@ shell: build
 	  --entrypoint=/bin/bash \
 	  dags
 
+test: build
+	docker compose run \
+	  --rm -it \
+	  dags
+
 build-dev:
 	docker build \
 	  --build-arg INSTALL_GROUPS="main,dev" \
