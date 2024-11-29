@@ -1,0 +1,63 @@
+# docs: https://docs.dagster.io/deployment/dagster-instance#configuration-reference
+
+storage:
+  postgres:
+    postgres_db:
+      username:
+        env: DAGSTER_PG_USERNAME
+      password:
+        env: DAGSTER_PG_PASSWORD
+      hostname:
+        env: DAGSTER_PG_HOST
+      db_name:
+        env: DAGSTER_PG_DB
+      port: 5432
+
+run_launcher:
+  module: dagster_docker
+  class: DockerRunLauncher
+
+# TODO: use queuedruncoordinator
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: DefaultRunCoordinator
+
+# TODO: use minio + one of the bucket storages?
+compute_logs:
+  module: dagster.core.storage.local_compute_log_manager
+  class: LocalComputeLogManager
+  config:
+    base_dir: /logs
+
+local_artifact_storage:
+  module: dagster.core.storage.root
+  class: LocalArtifactStorage
+  config:
+    base_dir: "/dagster/artifacts"
+
+# duh
+telemetry:
+  enabled: false
+
+code_servers:
+  local_startup_timeout: 180
+
+retention:
+  schedule:
+    purge_after_days:
+      skipped: 7
+      failure: -1
+      success: -1
+  sensor:
+    purge_after_days:
+      skipped: 7
+      failure: -1
+      success: -1
+
+sensors:
+  use_threads: true
+  num_workers: 2
+
+schedules:
+  use_threads: true
+  num_workers: 2
