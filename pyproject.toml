@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "project-name"
+name = "dagster-dags"
 version = "0.1.0"
 description = ""
 authors = ["Guido Petri <18634426+guidopetri@users.noreply.github.com>"]

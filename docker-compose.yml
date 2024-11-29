@@ -1,18 +1,32 @@
-x-project-service: &project-service
+x-dags-service: &dags-service
   restart: no
+  depends_on:
+    - postgres
   volumes:
-    - project_logs:/logs
+    - dags_logs:/logs
 
 services:
-  project:
-    <<: *project-service
-    container_name: project
-    image: project
+  dags:
+    <<: *dags-service
+    container_name: dags
+    image: dags
 
-  project_dev:
-    <<: *project-service
-    container_name: project_dev
-    image: project-dev
+  dags_dev:
+    <<: *dags-service
+    container_name: dags_dev
+    image: dags-dev
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    restart: always
+    ports:
+      - "127.0.0.1:5432:5432"
+    env_file:
+      - .postgres_env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
 volumes:
-  project_logs:
+  dags_logs:
+  postgres_data:
