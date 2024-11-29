@@ -21,6 +21,7 @@ RUN apt-get update \
 
 RUN mkdir /app
 WORKDIR /app
+ENV DAGSTER_HOME=/app
 
 ARG POETRY_VERSION=1.7.0
 ARG POETRY_HOME=/opt/poetry
@@ -36,3 +37,11 @@ RUN $POETRY_HOME/bin/poetry install --only main --no-root --no-ansi --no-cache \
 ARG INSTALL_GROUPS="main"
 RUN $POETRY_HOME/bin/poetry install --with $INSTALL_GROUPS --no-root --no-ansi --no-cache \
     && $POETRY_HOME/bin/poetry cache clear pypi --all
+
+COPY dagster.yaml /app
+COPY workspace.yaml /app
+RUN mkdir -p /dagster/artifacts
+
+EXPOSE 3000
+
+ENTRYPOINT ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000"]

@@ -6,8 +6,10 @@ authors = ["Guido Petri <18634426+guidopetri@users.noreply.github.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = ">=3.12,<3.13"
 more-itertools = "^10.4.0"
+dagster-webserver = "^1.9.3"
+dagster-postgres = "^0.25.3"
 
 [tool.poetry.group.dev.dependencies]
 pyright = "^1.1.351"
