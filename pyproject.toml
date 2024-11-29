@@ -21,6 +21,7 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.pyright]
+strict = ["*"]
 ignore = []
 useLibraryCodeForTypes = false
 
