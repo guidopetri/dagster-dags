@@ -2,6 +2,8 @@ x-dags-service: &dags-service
   restart: no
   depends_on:
     - postgres
+  env_file:
+    - .postgres_env
   volumes:
     - dags_logs:/logs
 

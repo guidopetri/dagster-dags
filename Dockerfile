@@ -42,6 +42,8 @@ COPY dagster.yaml /app
 COPY workspace.yaml /app
 RUN mkdir -p /dagster/artifacts
 
+COPY chess_pipeline/ /app/chess_pipeline/
+
 EXPOSE 3000
 
 ENTRYPOINT ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000"]
