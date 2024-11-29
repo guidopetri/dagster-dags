@@ -1,31 +1,31 @@
 build:
 	docker build \
 	  --build-arg INSTALL_GROUPS="main" \
-	  -t dags \
+	  -t dagster-dags \
 	  .
 
 shell: build
 	docker compose run \
 	  --rm -it \
 	  --entrypoint=/bin/bash \
-	  dags
+	  dagster-dags
 
 test: build
 	docker compose run \
 	  --rm -it \
-	  dags
+	  dagster-dags
 
 build-dev:
 	docker build \
 	  --build-arg INSTALL_GROUPS="main,dev" \
-	  -t dags-dev \
+	  -t dagster-dags-dev \
 	  .
 
 ci-pyright:
 	docker compose run \
 	  --rm \
 	  --entrypoint=pyright \
-	  dags_dev \
+	  dagster_dags_dev \
 	  --project /app/pyproject.toml \
 	  /app
 

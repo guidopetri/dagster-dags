@@ -1,22 +1,22 @@
-x-dags-service: &dags-service
+x-dagster-dags-service: &dagster-dags-service
   restart: no
   depends_on:
     - postgres
   env_file:
     - .postgres_env
   volumes:
-    - dags_logs:/logs
+    - dagster_dags_logs:/logs
 
 services:
-  dags:
-    <<: *dags-service
-    container_name: dags
-    image: dags
+  dagster_dags:
+    <<: *dagster-dags-service
+    container_name: dagster_dags
+    image: dagster-dags
 
-  dags_dev:
-    <<: *dags-service
-    container_name: dags_dev
-    image: dags-dev
+  dagster_dags_dev:
+    <<: *dagster-dags-service
+    container_name: dagster_dags_dev
+    image: dagster-dags-dev
 
   postgres:
     image: postgres:16-alpine
@@ -30,5 +30,5 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
 volumes:
-  dags_logs:
+  dagster_dags_logs:
   postgres_data:
