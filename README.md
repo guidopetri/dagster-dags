@@ -8,7 +8,11 @@ To add a new project, create a new repo-level folder with a `dags.py` file withi
 
 ```yaml
 load_from:
-  - python_file:
-      working_directory: new_project/
-      relative_path: dags.py
+  - python_module: new_project.dags
+```
+
+Additionally, copy the folder into the docker image in `Dockerfile`:
+
+```Dockerfile
+COPY new_project/ /app/new_project/
 ```
