@@ -1,0 +1,6 @@
+# docs: https://docs.dagster.io/concepts/code-locations/workspace-files
+
+load_from:
+  - python_file:
+      working_directory: chess_pipeline/
+      relative_path: dags.py
