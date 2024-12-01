@@ -7,13 +7,15 @@ build:
 shell: build
 	docker compose run \
 	  --rm -it \
+	  --service-ports \
 	  --entrypoint=/bin/bash \
-	  dagster-dags
+	  dagster_dags
 
 test: build
 	docker compose run \
 	  --rm -it \
-	  dagster-dags
+	  --service-ports \
+	  dagster_dags
 
 build-dev:
 	docker build \
