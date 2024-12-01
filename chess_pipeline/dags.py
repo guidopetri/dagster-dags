@@ -26,7 +26,7 @@ all_assets_job = define_asset_job(name='all_assets_job')
 @asset(deps=[],
        code_version='1',
        retry_policy=RetryPolicy(max_retries=3,
-                                delay=0.2,  # 200ms
+                                delay=0.2,
                                 backoff=Backoff.EXPONENTIAL,
                                 jitter=Jitter.PLUS_MINUS,
                                 ),
