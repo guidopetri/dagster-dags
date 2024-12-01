@@ -6,8 +6,8 @@ from dagster import (
     Definitions,
     Jitter,
     RetryPolicy,
-    asset,
-    define_asset_job,
+    asset,  # type: ignore
+    define_asset_job,  # type: ignore
 )
 from dagster_docker import execute_docker_container
 
@@ -36,7 +36,9 @@ def run_docker_hello_world(context: AssetExecutionContext,
                            ) -> None:
     context.log.info(f'My run ID is {context.run.run_id}')
     context.log.info(f'{config=}')
-    execute_docker_container(context=context, image='hello-world')
+    execute_docker_container(context=context,  # type: ignore
+                             image='hello-world',
+                             )
     return
 
 
