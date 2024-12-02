@@ -1,4 +1,5 @@
 
+import pandas as pd
 from dagster import (
     AssetExecutionContext,
     Backoff,
@@ -42,8 +43,22 @@ def run_docker_hello_world(context: AssetExecutionContext,
     return
 
 
+@asset(deps=[run_docker_hello_world])
+def run_docker_json_df(context: AssetExecutionContext) -> pd.DataFrame:
+    context.log.info(f'My run ID is {context.run.run_id}')
+    volumes_to_mount = {'/mnt/dagster_io/': {'bind': '/io/', 'mode': 'rw'}}
+
+    execute_docker_container(context=context,  # type: ignore
+                             image='chess-pipeline',
+                             entrypoint='python',
+                             command='/app/docker_entrypoint.py',
+                             container_kwargs={'volumes': volumes_to_mount},
+                             )
+    return pd.read_pickle('/mnt/dagster_io/2024_12_01_test_df.pckl')
+
+
 defs = Definitions(
-    assets=[run_docker_hello_world],
+    assets=[run_docker_hello_world, run_docker_json_df],
     jobs=[all_assets_job],
     schedules=[],
 )

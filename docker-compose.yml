@@ -8,6 +8,7 @@ x-dagster-dags-service: &dagster-dags-service
     - .postgres_env
   volumes:
     - dagster_dags_logs:/logs
+    - /mnt/dagster_io:/mnt/dagster_io
     - /var/run/docker.sock:/var/run/docker.sock
 
 services:
