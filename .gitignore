@@ -1,2 +1,3 @@
 .postgres_env
 .ruff_cache/
+config.toml
