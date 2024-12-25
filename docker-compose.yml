@@ -1,7 +1,7 @@
 x-dagster-dags-service: &dagster-dags-service
   restart: no
   depends_on:
-    - postgres
+    - dagster_postgres
   ports:
     - "127.0.0.1:3000:3000"
   env_file:
@@ -10,6 +10,8 @@ x-dagster-dags-service: &dagster-dags-service
     - dagster_dags_logs:/logs
     - /mnt/dagster_io:/mnt/dagster_io
     - /var/run/docker.sock:/var/run/docker.sock
+  networks:
+    - mainnetwork
 
 services:
   dagster_dags:
@@ -22,17 +24,23 @@ services:
     container_name: dagster_dags_dev
     image: dagster-dags-dev
 
-  postgres:
+  dagster_postgres:
     image: postgres:16-alpine
-    container_name: postgres
+    container_name: dagster_postgres
     restart: always
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5433:5432"
     env_file:
       - .postgres_env
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - mainnetwork
 
 volumes:
   dagster_dags_logs:
   postgres_data:
+
+networks:
+  mainnetwork:
+    external: true
