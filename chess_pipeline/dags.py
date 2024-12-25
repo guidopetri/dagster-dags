@@ -1,3 +1,9 @@
+"""
+DAG declarations for lichess ETL.
+"""
+
+from dataclasses import dataclass
+from typing import Callable
 
 import pandas as pd
 from dagster import (
@@ -12,6 +18,23 @@ from dagster import (
 )
 from dagster_docker import execute_docker_container
 
+Asset = Callable[[AssetExecutionContext], pd.DataFrame | bool]
+
+
+@dataclass
+class AssetSpec:
+    name: str
+    deps: list[Asset]
+    step: str
+    output: str | None
+
+
+@dataclass
+class LoaderAssetSpec:
+    name: str
+    deps: list[Asset]
+    table: str
+
 
 class DagRunConfig(Config):
     player: str
@@ -23,384 +46,159 @@ class DagRunConfig(Config):
 all_assets_job = define_asset_job(name='all_assets_job')
 
 
-# TODO: metadata/tags
-@asset(deps=[],
-       code_version='1',
-       retry_policy=RetryPolicy(max_retries=3,
-                                delay=0.2,
-                                backoff=Backoff.EXPONENTIAL,
-                                jitter=Jitter.PLUS_MINUS,
-                                ),
-       )
-def run_docker_hello_world(context: AssetExecutionContext,
-                           config: DagRunConfig,
-                           ) -> None:
-    context.log.info(f'My run ID is {context.run.run_id}')
-    context.log.info(f'{config=}')
-    execute_docker_container(context=context,  # type: ignore
-                             image='hello-world',
-                             )
-    return
+env_vars = {'DAGSTER_IO_DIR': '/io/'}
+
+volumes_to_mount = {'/mnt/dagster_io/':
+                    {'bind': env_vars['DAGSTER_IO_DIR'],
+                     'mode': 'rw',
+                     },
+                    }
 
 
-@asset
-def run_docker_json_df(context: AssetExecutionContext) -> pd.DataFrame:
-    context.log.info(f'My run ID is {context.run.run_id}')
-
-    env_vars = {'DAGSTER_IO_DIR': '/io/'}
-
-    volumes_to_mount = {'/mnt/dagster_io/':
-                        {'bind': env_vars['DAGSTER_IO_DIR'],
-                         'mode': 'rw',
-                         },
-                        }
-
-    execute_docker_container(context=context,  # type: ignore
-                             image='chess-pipeline',
-                             entrypoint='python',
-                             command=['/app/docker_entrypoint.py',
-                                      '--step',
-                                      'fetch_json',
-                                      ],
-                             networks=['mainnetwork'],
-                             # dagster expects env vars in NAME=value format
-                             env_vars=[f'{k}={v}'
-                                       for k, v in env_vars.items()],
-                             container_kwargs={'volumes': volumes_to_mount,
-                                               'auto_remove': True,
-                                               },
-                             )
-    df = pd.read_parquet('/mnt/dagster_io/raw_json.parquet')
-    return df
-
-
-@asset(deps=[run_docker_json_df])
-def run_docker_pgn_df(context: AssetExecutionContext) -> pd.DataFrame:
-    context.log.info(f'My run ID is {context.run.run_id}')
-
-    env_vars = {'DAGSTER_IO_DIR': '/io/'}
-
-    volumes_to_mount = {'/mnt/dagster_io/':
-                        {'bind': env_vars['DAGSTER_IO_DIR'],
-                         'mode': 'rw',
-                         },
-                        }
-
-    execute_docker_container(context=context,  # type: ignore
-                             image='chess-pipeline',
-                             entrypoint='python',
-                             command=['/app/docker_entrypoint.py',
-                                      '--step',
-                                      'fetch_pgn',
-                                      ],
-                             networks=['mainnetwork'],
-                             # dagster expects env vars in NAME=value format
-                             env_vars=[f'{k}={v}'
-                                       for k, v in env_vars.items()],
-                             container_kwargs={'volumes': volumes_to_mount,
-                                               'auto_remove': True,
-                                               },
-                             )
-    df = pd.read_parquet('/mnt/dagster_io/raw_pgn.parquet')
-    return df
+def make_asset(spec: AssetSpec) -> Asset:
+    # TODO: metadata/tags
+    @asset(name=spec.name,
+           deps=spec.deps,
+           code_version='1',
+           retry_policy=RetryPolicy(max_retries=3,
+                                    delay=0.2,
+                                    backoff=Backoff.EXPONENTIAL,
+                                    jitter=Jitter.PLUS_MINUS,
+                                    ),
+           )
+    def asset_fn(context: AssetExecutionContext,
+                 config: DagRunConfig,
+                 ):  # -> pd.DataFrame | bool:  # TODO add typing
+        context.log.info(f'My run ID is {context.run.run_id}')
+        context.log.info(f'{config=}')
+        execute_docker_container(context=context,  # type: ignore
+                                 image='chess-pipeline',
+                                 entrypoint='python',
+                                 command=['/app/docker_entrypoint.py',
+                                          '--step',
+                                          f'{spec.step}',
+                                          # TODO use config
+                                          ],
+                                 networks=['mainnetwork'],
+                                 # dagster expects env vars like NAME=value
+                                 env_vars=[f'{k}={v}'
+                                           for k, v in env_vars.items()],
+                                 container_kwargs={'volumes': volumes_to_mount,
+                                                   'auto_remove': True,
+                                                   },
+                                 )
+        if spec.output is None:
+            return True
+        df = pd.read_parquet(f'/mnt/dagster_io/{spec.output}.parquet')
+        return df
+    return asset_fn
 
 
-@asset(deps=[run_docker_json_df, run_docker_pgn_df])
-def run_docker_clean_df(context: AssetExecutionContext) -> pd.DataFrame:
-    context.log.info(f'My run ID is {context.run.run_id}')
-
-    env_vars = {'DAGSTER_IO_DIR': '/io/'}
-
-    volumes_to_mount = {'/mnt/dagster_io/':
-                        {'bind': env_vars['DAGSTER_IO_DIR'],
-                         'mode': 'rw',
-                         },
-                        }
-
-    execute_docker_container(context=context,  # type: ignore
-                             image='chess-pipeline',
-                             entrypoint='python',
-                             command=['/app/docker_entrypoint.py',
-                                      '--step',
-                                      'clean_df',
-                                      ],
-                             networks=['mainnetwork'],
-                             # dagster expects env vars in NAME=value format
-                             env_vars=[f'{k}={v}'
-                                       for k, v in env_vars.items()],
-                             container_kwargs={'volumes': volumes_to_mount,
-                                               'auto_remove': True,
-                                               },
-                             )
-    df = pd.read_parquet('/mnt/dagster_io/cleaned_df.parquet')
-    return df
+def make_data_loader(loader_spec: LoaderAssetSpec) -> Asset:
+    spec = AssetSpec(name=loader_spec.name,
+                     deps=loader_spec.deps,
+                     step=f'load_{loader_spec.table}',
+                     output=None,
+                     )
+    return make_asset(spec)
 
 
-@asset(deps=[run_docker_clean_df])
-def run_docker_get_evals(context: AssetExecutionContext) -> pd.DataFrame:
-    context.log.info(f'My run ID is {context.run.run_id}')
+data_specs: list[AssetSpec] = [
+    AssetSpec(name='fetch_json',
+              deps=[],
+              step='fetch_json',
+              output='raw_json',
+              ),
+    AssetSpec(name='fetch_pgn',
+              deps=['fetch_json'],
+              step='fetch_pgn',
+              output='raw_pgn',
+              ),
+    AssetSpec(name='clean_df',
+              deps=['fetch_json', 'fetch_pgn'],
+              step='clean_df',
+              output='cleaned_df',
+              ),
+    AssetSpec(name='get_evals',
+              deps=['clean_df'],
+              step='get_evals',
+              output='evals',
+              ),
+    AssetSpec(name='explode_moves',
+              deps=['clean_df'],
+              step='explode_moves',
+              output='exploded_moves',
+              ),
+    AssetSpec(name='explode_clocks',
+              deps=['clean_df'],
+              step='explode_clocks',
+              output='exploded_clocks',
+              ),
+    AssetSpec(name='explode_positions',
+              deps=['clean_df'],
+              step='explode_positions',
+              output='exploded_positions',
+              ),
+    AssetSpec(name='explode_materials',
+              deps=['clean_df'],
+              step='explode_materials',
+              output='exploded_materials',
+              ),
+    AssetSpec(name='get_game_infos',
+              deps=['clean_df'],
+              step='get_game_infos',
+              output='game_infos',
+              ),
+    AssetSpec(name='get_win_probs',
+              deps=['get_evals',
+                    'explode_positions',
+                    'explode_clocks',
+                    'get_game_infos',
+                    ],
+              step='get_win_probs',
+              output='win_probabilities',
+              ),
+    ]
 
-    env_vars = {'DAGSTER_IO_DIR': '/io/'}
+data_assets = [make_asset(spec) for spec in data_specs]
 
-    volumes_to_mount = {'/mnt/dagster_io/':
-                        {'bind': env_vars['DAGSTER_IO_DIR'],
-                         'mode': 'rw',
-                         },
-                        }
-
-    execute_docker_container(context=context,  # type: ignore
-                             image='chess-pipeline',
-                             entrypoint='python',
-                             command=['/app/docker_entrypoint.py',
-                                      '--step',
-                                      'get_evals',
-                                      ],
-                             networks=['mainnetwork'],
-                             # dagster expects env vars in NAME=value format
-                             env_vars=[f'{k}={v}'
-                                       for k, v in env_vars.items()],
-                             container_kwargs={'volumes': volumes_to_mount,
-                                               'auto_remove': True,
-                                               },
-                             )
-    df = pd.read_parquet('/mnt/dagster_io/evals.parquet')
-    return df
-
-
-@asset(deps=[run_docker_clean_df])
-def run_docker_explode_moves(context: AssetExecutionContext) -> pd.DataFrame:
-    context.log.info(f'My run ID is {context.run.run_id}')
-
-    env_vars = {'DAGSTER_IO_DIR': '/io/'}
-
-    volumes_to_mount = {'/mnt/dagster_io/':
-                        {'bind': env_vars['DAGSTER_IO_DIR'],
-                         'mode': 'rw',
-                         },
-                        }
-
-    execute_docker_container(context=context,  # type: ignore
-                             image='chess-pipeline',
-                             entrypoint='python',
-                             command=['/app/docker_entrypoint.py',
-                                      '--step',
-                                      'explode_moves',
-                                      ],
-                             networks=['mainnetwork'],
-                             # dagster expects env vars in NAME=value format
-                             env_vars=[f'{k}={v}'
-                                       for k, v in env_vars.items()],
-                             container_kwargs={'volumes': volumes_to_mount,
-                                               'auto_remove': True,
-                                               },
-                             )
-    df = pd.read_parquet('/mnt/dagster_io/exploded_moves.parquet')
-    return df
-
-
-@asset(deps=[run_docker_clean_df])
-def run_docker_explode_clocks(context: AssetExecutionContext) -> pd.DataFrame:
-    context.log.info(f'My run ID is {context.run.run_id}')
-
-    env_vars = {'DAGSTER_IO_DIR': '/io/'}
-
-    volumes_to_mount = {'/mnt/dagster_io/':
-                        {'bind': env_vars['DAGSTER_IO_DIR'],
-                         'mode': 'rw',
-                         },
-                        }
-
-    execute_docker_container(context=context,  # type: ignore
-                             image='chess-pipeline',
-                             entrypoint='python',
-                             command=['/app/docker_entrypoint.py',
-                                      '--step',
-                                      'explode_clocks',
-                                      ],
-                             networks=['mainnetwork'],
-                             # dagster expects env vars in NAME=value format
-                             env_vars=[f'{k}={v}'
-                                       for k, v in env_vars.items()],
-                             container_kwargs={'volumes': volumes_to_mount,
-                                               'auto_remove': True,
-                                               },
-                             )
-    df = pd.read_parquet('/mnt/dagster_io/exploded_clocks.parquet')
-    return df
-
-
-@asset(deps=[run_docker_clean_df])
-def explode_positions(context: AssetExecutionContext) -> pd.DataFrame:
-    context.log.info(f'My run ID is {context.run.run_id}')
-
-    env_vars = {'DAGSTER_IO_DIR': '/io/'}
-
-    volumes_to_mount = {'/mnt/dagster_io/':
-                        {'bind': env_vars['DAGSTER_IO_DIR'],
-                         'mode': 'rw',
-                         },
-                        }
-
-    execute_docker_container(context=context,  # type: ignore
-                             image='chess-pipeline',
-                             entrypoint='python',
-                             command=['/app/docker_entrypoint.py',
-                                      '--step',
-                                      'explode_positions',
-                                      ],
-                             networks=['mainnetwork'],
-                             # dagster expects env vars in NAME=value format
-                             env_vars=[f'{k}={v}'
-                                       for k, v in env_vars.items()],
-                             container_kwargs={'volumes': volumes_to_mount,
-                                               'auto_remove': True,
-                                               },
-                             )
-    df = pd.read_parquet('/mnt/dagster_io/exploded_positions.parquet')
-    return df
+loader_specs: list[LoaderAssetSpec] = [
+    LoaderAssetSpec(name='load_games',
+                    deps=['get_game_infos'],
+                    table='chess_games',
+                    ),
+    LoaderAssetSpec(name='load_evals',
+                    deps=['get_evals'],
+                    table='position_evals',
+                    ),
+    LoaderAssetSpec(name='load_positions',
+                    deps=['explode_positions'],
+                    table='game_positions',
+                    ),
+    LoaderAssetSpec(name='load_materials',
+                    deps=['explode_materials'],
+                    table='game_materials',
+                    ),
+    LoaderAssetSpec(name='load_clocks',
+                    deps=['explode_clocks'],
+                    table='move_clocks',
+                    ),
+    LoaderAssetSpec(name='load_moves',
+                    deps=['explode_moves'],
+                    table='move_list',
+                    ),
+    LoaderAssetSpec(name='load_win_probs',
+                    deps=['get_win_probs'],
+                    table='win_probs',
+                    ),
+    ]
+loader_assets = [make_data_loader(spec) for spec in loader_specs]
 
 
-@asset(deps=[run_docker_clean_df])
-def explode_materials(context: AssetExecutionContext) -> pd.DataFrame:
-    context.log.info(f'My run ID is {context.run.run_id}')
-
-    env_vars = {'DAGSTER_IO_DIR': '/io/'}
-
-    volumes_to_mount = {'/mnt/dagster_io/':
-                        {'bind': env_vars['DAGSTER_IO_DIR'],
-                         'mode': 'rw',
-                         },
-                        }
-
-    execute_docker_container(context=context,  # type: ignore
-                             image='chess-pipeline',
-                             entrypoint='python',
-                             command=['/app/docker_entrypoint.py',
-                                      '--step',
-                                      'explode_materials',
-                                      ],
-                             networks=['mainnetwork'],
-                             # dagster expects env vars in NAME=value format
-                             env_vars=[f'{k}={v}'
-                                       for k, v in env_vars.items()],
-                             container_kwargs={'volumes': volumes_to_mount,
-                                               'auto_remove': True,
-                                               },
-                             )
-    df = pd.read_parquet('/mnt/dagster_io/exploded_materials.parquet')
-    return df
-
-
-@asset(deps=[run_docker_clean_df])
-def run_docker_get_game_infos(context: AssetExecutionContext) -> pd.DataFrame:
-    context.log.info(f'My run ID is {context.run.run_id}')
-
-    env_vars = {'DAGSTER_IO_DIR': '/io/'}
-
-    volumes_to_mount = {'/mnt/dagster_io/':
-                        {'bind': env_vars['DAGSTER_IO_DIR'],
-                         'mode': 'rw',
-                         },
-                        }
-
-    execute_docker_container(context=context,  # type: ignore
-                             image='chess-pipeline',
-                             entrypoint='python',
-                             command=['/app/docker_entrypoint.py',
-                                      '--step',
-                                      'get_game_infos',
-                                      ],
-                             networks=['mainnetwork'],
-                             # dagster expects env vars in NAME=value format
-                             env_vars=[f'{k}={v}'
-                                       for k, v in env_vars.items()],
-                             container_kwargs={'volumes': volumes_to_mount,
-                                               'auto_remove': True,
-                                               },
-                             )
-    df = pd.read_parquet('/mnt/dagster_io/game_infos.parquet')
-    return df
-
-
-@asset(deps=[run_docker_get_evals,
-             explode_positions,
-             run_docker_explode_clocks,
-             run_docker_get_game_infos,
-             ])
-def run_docker_get_win_probs(context: AssetExecutionContext) -> pd.DataFrame:
-    context.log.info(f'My run ID is {context.run.run_id}')
-
-    env_vars = {'DAGSTER_IO_DIR': '/io/'}
-
-    volumes_to_mount = {'/mnt/dagster_io/':
-                        {'bind': env_vars['DAGSTER_IO_DIR'],
-                         'mode': 'rw',
-                         },
-                        }
-
-    execute_docker_container(context=context,  # type: ignore
-                             image='chess-pipeline',
-                             entrypoint='python',
-                             command=['/app/docker_entrypoint.py',
-                                      '--step',
-                                      'get_win_probs',
-                                      ],
-                             networks=['mainnetwork'],
-                             # dagster expects env vars in NAME=value format
-                             env_vars=[f'{k}={v}'
-                                       for k, v in env_vars.items()],
-                             container_kwargs={'volumes': volumes_to_mount,
-                                               'auto_remove': True,
-                                               },
-                             )
-    df = pd.read_parquet('/mnt/dagster_io/win_probabilities.parquet')
-    return df
-
-
-@asset(deps=[run_docker_get_game_infos])
-def run_docker_load_chess_games(context: AssetExecutionContext) -> bool:
-    context.log.info(f'My run ID is {context.run.run_id}')
-
-    env_vars = {'DAGSTER_IO_DIR': '/io/'}
-
-    volumes_to_mount = {'/mnt/dagster_io/':
-                        {'bind': env_vars['DAGSTER_IO_DIR'],
-                         'mode': 'rw',
-                         },
-                        }
-
-    execute_docker_container(context=context,  # type: ignore
-                             image='chess-pipeline',
-                             entrypoint='python',
-                             command=['/app/docker_entrypoint.py',
-                                      '--step',
-                                      'load_chess_games',
-                                      ],
-                             networks=['mainnetwork'],
-                             # dagster expects env vars in NAME=value format
-                             env_vars=[f'{k}={v}'
-                                       for k, v in env_vars.items()],
-                             container_kwargs={'volumes': volumes_to_mount,
-                                               'auto_remove': True,
-                                               },
-                             )
-    return True
-
+ASSETS: list[Asset] = data_assets + loader_assets
 
 defs = Definitions(
-    assets=[run_docker_hello_world,
-            run_docker_json_df,
-            run_docker_pgn_df,
-            run_docker_clean_df,
-            run_docker_get_evals,
-            run_docker_explode_moves,
-            run_docker_explode_clocks,
-            explode_positions,
-            explode_materials,
-            run_docker_get_game_infos,
-            run_docker_get_win_probs,
-            run_docker_load_chess_games,
-            ],
+    assets=ASSETS,
     jobs=[all_assets_job],
     schedules=[],
 )
