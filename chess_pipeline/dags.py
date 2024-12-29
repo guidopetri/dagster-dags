@@ -13,8 +13,11 @@ from dagster import (
     Definitions,
     Jitter,
     RetryPolicy,
+    RunConfig,
+    RunRequest,
     asset,  # type: ignore
     define_asset_job,  # type: ignore
+    schedule,
 )
 from dagster_docker import execute_docker_container
 
@@ -204,9 +207,31 @@ loader_assets = [make_data_loader(spec) for spec in loader_specs]
 
 
 ASSETS: list[Asset] = data_assets + loader_assets
+SPECS: list[AssetSpec | LoaderAssetSpec] = data_specs + loader_specs
+
+
+@schedule(
+    cron_schedule='*/5 * * * *',
+    job=all_assets_job,
+    execution_timezone='America/Chicago',
+)
+def every_5min(context):
+    date = context.scheduled_execution_time.strftime('%Y-%m-%d')
+    # get_dagster_logger().info(f"Found {len(cereal_list)} cereals")
+    cfg = DagRunConfig(player='Grahtbo',
+                       perf_type='bullet',
+                       data_date=date,
+                       local_stockfish=True,
+                       )
+    run_config = RunConfig(ops={spec.name: cfg for spec in SPECS})
+
+    return RunRequest(run_key=f'test_{date}',
+                      run_config=run_config,
+                      )
+
 
 defs = Definitions(
     assets=ASSETS,
     jobs=[all_assets_job],
-    schedules=[],
+    schedules=[every_5min],
 )
