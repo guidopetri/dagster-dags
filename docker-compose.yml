@@ -19,6 +19,16 @@ services:
     container_name: dagster_dags
     image: dagster-dags
 
+  dagster_daemon:
+    <<: *dagster-dags-service
+    container_name: dagster_daemon
+    image: dagster-dags
+    entrypoint:
+      - dagster-daemon
+      - run
+    ports:
+      - "127.0.0.1:3001:3000"
+
   dagster_dags_dev:
     <<: *dagster-dags-service
     container_name: dagster_dags_dev

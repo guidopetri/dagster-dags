@@ -12,10 +12,9 @@ shell: build
 	  dagster_dags
 
 test: build
-	docker compose run \
-	  --rm -it \
-	  --service-ports \
-	  dagster_dags
+	docker compose up \
+	  dagster_dags \
+	  dagster_daemon
 
 build-dev:
 	docker build \
