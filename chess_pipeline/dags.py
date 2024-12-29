@@ -77,7 +77,15 @@ def make_asset(spec: AssetSpec) -> Asset:
                                  command=['/app/docker_entrypoint.py',
                                           '--step',
                                           f'{spec.step}',
-                                          # TODO use config
+                                          '--player',
+                                          f'{config.player}',
+                                          '--perf_type',
+                                          f'{config.perf_type}',
+                                          '--data_date',
+                                          f'{config.data_date}',
+                                          '--local_stockfish'
+                                          if config.local_stockfish
+                                          else '',
                                           ],
                                  networks=['mainnetwork'],
                                  # dagster expects env vars like NAME=value
