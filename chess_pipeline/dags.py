@@ -2,8 +2,9 @@
 DAG declarations for lichess ETL.
 """
 
+import itertools
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import Callable
 
 import pandas as pd
 from dagster import (
@@ -17,6 +18,7 @@ from dagster import (
     RunRequest,
     asset,  # type: ignore
     define_asset_job,  # type: ignore
+    get_dagster_logger,
     schedule,
 )
 from dagster_docker import execute_docker_container
@@ -100,7 +102,8 @@ def make_asset(spec: AssetSpec) -> Asset:
                                  )
         if spec.output is None:
             return True
-        df = pd.read_parquet(f'/mnt/dagster_io/{spec.output}.parquet')
+        prefix = f'{config.data_date}_{config.player}_{config.perf_type}'
+        df = pd.read_parquet(f'/mnt/dagster_io/{prefix}_{spec.output}.parquet')
         return df
     return asset_fn
 
@@ -215,19 +218,25 @@ SPECS: list[AssetSpec | LoaderAssetSpec] = data_specs + loader_specs
     job=all_assets_job,
     execution_timezone='America/Chicago',
 )
-def every_5min(context):
+def every_5min(context) -> Iterator[RunRequest]:
     date = context.scheduled_execution_time.strftime('%Y-%m-%d')
-    # get_dagster_logger().info(f"Found {len(cereal_list)} cereals")
-    cfg = DagRunConfig(player='Grahtbo',
-                       perf_type='bullet',
-                       data_date=date,
-                       local_stockfish=True,
-                       )
-    run_config = RunConfig(ops={spec.name: cfg for spec in SPECS})
 
-    return RunRequest(run_key=f'test_{date}',
-                      run_config=run_config,
-                      )
+    players = ['Grahtbo', 'siddhartha13']
+    perf_types = ['bullet', 'blitz']
+
+    for player, perf_type in itertools.product(players, perf_types):
+        config = {'player': player,
+                  'perf_type': perf_type,
+                  'data_date': date,
+                  'local_stockfish': True,
+                  }
+        get_dagster_logger().info(f'Requesting run for {config=}')
+        cfg = DagRunConfig(**config)
+        run_config = RunConfig(ops={spec.name: cfg for spec in SPECS})
+
+        yield RunRequest(run_key=f'{date}_{player}_{perf_type}',
+                         run_config=run_config,
+                         )
 
 
 defs = Definitions(
