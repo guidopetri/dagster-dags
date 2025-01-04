@@ -60,7 +60,9 @@ volumes_to_mount = {'/mnt/dagster_io/':
                     }
 
 
-class SpecHandler(Protocol):
+class SpecHandler[AssetSpecSubclass: GenericAssetSpec,
+                  ConfigSubclass: Config,
+                  ](Protocol):
     """
     Protocol for a function that handles a subclass of GenericAssetSpec and a
     subclass of Config.
@@ -70,8 +72,8 @@ class SpecHandler(Protocol):
 
     # TODO: remove Any
     def __call__(self,
-                 spec: Any,
-                 config: Any,
+                 spec: AssetSpecSubclass,
+                 config: ConfigSubclass,
                  ) -> Any:
         ...
 
@@ -83,12 +85,14 @@ def _no_output(spec: GenericAssetSpec, config: Config) -> None:
     return None
 
 
-# TODO: fix typing
-def make_asset(spec: Any,
-               config_type: Any,
-               get_command: SpecHandler,
-               get_output: SpecHandler = _no_output,
-               ) -> AssetsDefinition:
+def make_asset[AssetSpecSubclass: GenericAssetSpec,
+               ConfigSubclass: Config,
+               ](spec: AssetSpecSubclass,
+                 config_type: type[ConfigSubclass],
+                 get_command: SpecHandler[AssetSpecSubclass, ConfigSubclass],
+                 get_output: SpecHandler[AssetSpecSubclass,
+                                         ConfigSubclass] = _no_output,
+                 ) -> AssetsDefinition:
     # TODO: metadata/tags
     # TODO: add partition key definition
     @asset(name=spec.name,
@@ -101,7 +105,7 @@ def make_asset(spec: Any,
                                     ),
            )
     def asset_fn(context: AssetExecutionContext,
-                 config: Any,
+                 config: config_type,
                  ) -> Any:
         context.log.info(f'My run ID is {context.run.run_id}')
         context.log.info(f'{config=}')
@@ -121,10 +125,11 @@ def make_asset(spec: Any,
     return asset_fn
 
 
-def make_data_loader(loader_spec: LoaderAssetSpec,
-                     config_type: type[Config],
-                     get_command: SpecHandler,
-                     ) -> AssetsDefinition:
+def make_data_loader[ConfigSubclass: Config,
+                     ](loader_spec: LoaderAssetSpec,
+                       config_type: type[ConfigSubclass],
+                       get_command: SpecHandler[AssetSpec, ConfigSubclass],
+                       ) -> AssetsDefinition:
     spec: AssetSpec = AssetSpec(name=loader_spec.name,
                                 deps=loader_spec.deps,
                                 step=f'load_{loader_spec.table}',
