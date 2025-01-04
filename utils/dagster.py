@@ -47,6 +47,10 @@ volumes_to_mount = {'/mnt/dagster_io/':
                     {'bind': env_vars['DAGSTER_IO_DIR'],
                      'mode': 'rw',
                      },
+                    '/home/users/loki/data/chess_pipeline/config/':
+                    {'bind': '/config',
+                     'mode': 'rw',
+                     },
                     }
 
 
