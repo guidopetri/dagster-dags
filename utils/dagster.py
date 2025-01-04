@@ -98,7 +98,7 @@ def make_asset(spec: GenericAssetSpec,
                                  image='chess-pipeline',
                                  entrypoint='python',
                                  command=get_command(spec=spec, config=config),
-                                 networks=['mainnetwork'],
+                                 networks=['main-network'],
                                  # dagster expects env vars like NAME=value
                                  env_vars=[f'{k}={v}'
                                            for k, v in env_vars.items()],
