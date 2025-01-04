@@ -2,6 +2,7 @@
 Utilities for Dagster DAGs.
 """
 
+import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -42,13 +43,17 @@ class LoaderAssetSpec(GenericAssetSpec):
     table: str
 
 
-env_vars = {'DAGSTER_IO_DIR': '/io/'}
+env_vars: dict[str, str] = {'DAGSTER_IO_DIR': '/io/'}
+
+DEFAULT_CONFIG_PATH: str = '/home/users/loki/data/chess_pipeline/config/'
+CONFIG_PATH: str = os.getenv('CHESS_PIPELINE_CONFIG_PATH',
+                             DEFAULT_CONFIG_PATH)
 
 volumes_to_mount = {'/mnt/dagster_io/':
                     {'bind': env_vars['DAGSTER_IO_DIR'],
                      'mode': 'rw',
                      },
-                    '/home/users/loki/data/chess_pipeline/config/':
+                    CONFIG_PATH:
                     {'bind': '/config',
                      'mode': 'rw',
                      },
