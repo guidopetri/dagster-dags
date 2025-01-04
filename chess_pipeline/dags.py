@@ -55,7 +55,7 @@ def get_output(spec: AssetSpec, config: DagRunConfig) -> pd.DataFrame | bool:
     if spec.output is None:
         return True
     prefix = f'{config.data_date}_{config.player}_{config.perf_type}'
-    df = pd.read_parquet(f'/mnt/dagster_io/{prefix}_{spec.output}.parquet')
+    df = pd.read_parquet(f'/io/{prefix}_{spec.output}.parquet')
     return df
 
 
