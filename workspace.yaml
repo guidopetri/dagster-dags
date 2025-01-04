@@ -2,3 +2,4 @@
 
 load_from:
   - python_module: chess_pipeline.dags
+  - python_module: chess_pipeline.newsletter
