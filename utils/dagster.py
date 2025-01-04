@@ -45,7 +45,7 @@ class LoaderAssetSpec(GenericAssetSpec):
 
 env_vars: dict[str, str] = {'DAGSTER_IO_DIR': '/io/'}
 
-DEFAULT_CONFIG_PATH: str = '/home/users/loki/data/chess_pipeline/config/'
+DEFAULT_CONFIG_PATH: str = '/home/loki/data/chess_pipeline/config/'
 CONFIG_PATH: str = os.getenv('CHESS_PIPELINE_CONFIG_PATH',
                              DEFAULT_CONFIG_PATH)
 CHESS_PIPELINE_IMAGE: str = ('ghcr.io/guidopetri/chess-pipeline-dagster'
