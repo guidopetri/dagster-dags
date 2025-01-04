@@ -18,6 +18,7 @@ fastparquet = "^2024.11.0"
 pyright = "^1.1.351"
 pre-commit = "^3.7.0"
 ruff = "^0.4.1"
+pandas-stubs = "^2.2.3.241126"
 
 [build-system]
 requires = ["poetry-core"]
