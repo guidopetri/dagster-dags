@@ -7,18 +7,19 @@ import os
 from collections.abc import Iterator
 
 from dagster import (
+    AssetsDefinition,
     Config,
     Definitions,
     EnvVar,
     RunConfig,
     RunRequest,
+    ScheduleEvaluationContext,
     define_asset_job,  # type: ignore
     get_dagster_logger,
-    schedule,
+    schedule,  # type: ignore
 )
 
 from utils.dagster import (
-    Asset,
     AssetSpec,
     make_asset,
 )
@@ -30,7 +31,9 @@ class NewsletterDagRunConfig(Config):
     receiver: str
 
 
-def get_asset_command(spec, config):
+def get_asset_command(spec: AssetSpec,
+                      config: NewsletterDagRunConfig,
+                      ) -> list[str]:
     return ['/app/newsletter_entrypoint.py',
             '--step',
             f'{spec.step}',
@@ -80,7 +83,7 @@ data_assets = [make_asset(spec=spec,
                for spec in data_specs]
 
 
-ASSETS: list[Asset] = data_assets
+ASSETS: list[AssetsDefinition] = data_assets
 SPECS: list[AssetSpec] = data_specs
 
 
@@ -94,28 +97,34 @@ SPECS: list[AssetSpec] = data_specs
     # default_status=,
     # metadata=,
 )
-def newsletter_schedule(context) -> Iterator[RunRequest]:
-    date = context.scheduled_execution_time.strftime('%Y-%m-%d')
+def newsletter_schedule(context: ScheduleEvaluationContext,
+                        ) -> Iterator[RunRequest]:
+    date: str = context.scheduled_execution_time.strftime('%Y-%m-%d')
 
-    players = ['Grahtbo', 'siddhartha13']
-    categories = ['blitz']
+    players: list[str] = ['Grahtbo', 'siddhartha13']
+    categories: list[str] = ['blitz']
+
+    receiver: str | None = EnvVar('NEWSLETTER_TARGET').get_value()
+    if receiver is None:
+        raise ValueError('Missing newsletter target email. Please set the '
+                         'NEWSLETTER_TARGET environment variable.')
 
     for player, category in itertools.product(players, categories):
-        config = {'player': player,
-                  'category': category,
-                  'receiver': EnvVar('NEWSLETTER_TARGET').get_value(),
-                  }
+        config: dict[str, str] = {'player': player,
+                                  'category': category,
+                                  'receiver': receiver,
+                                  }
         get_dagster_logger().info(f'Requesting run for {config=}')
-        cfg = NewsletterDagRunConfig(**config)
-        run_config = RunConfig(ops={spec.name: cfg for spec in SPECS})
+        cfg: NewsletterDagRunConfig = NewsletterDagRunConfig(**config)
+        run_config: RunConfig = RunConfig(ops={spec.name: cfg
+                                               for spec in SPECS})
 
         yield RunRequest(run_key=f'{date}_{player}_{category}',
                          run_config=run_config,
                          )
 
 
-defs = Definitions(
-    assets=ASSETS,
-    jobs=[newsletter_job],
-    schedules=[newsletter_schedule],
-)
+defs: Definitions = Definitions(assets=ASSETS,
+                                jobs=[newsletter_job],
+                                schedules=[newsletter_schedule],
+                                )

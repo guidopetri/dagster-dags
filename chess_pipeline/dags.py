@@ -8,17 +8,18 @@ from collections.abc import Iterator
 
 import pandas as pd
 from dagster import (
+    AssetsDefinition,
     Config,
     Definitions,
     RunConfig,
     RunRequest,
+    ScheduleEvaluationContext,
     define_asset_job,  # type: ignore
     get_dagster_logger,
-    schedule,
+    schedule,  # type: ignore
 )
 
 from utils.dagster import (
-    Asset,
     AssetSpec,
     LoaderAssetSpec,
     make_asset,
@@ -36,7 +37,7 @@ class DagRunConfig(Config):
 all_assets_job = define_asset_job(name='all_assets_job')
 
 
-def get_asset_command(spec, config):
+def get_asset_command(spec: AssetSpec, config: DagRunConfig) -> list[str]:
     return ['/app/docker_entrypoint.py',
             '--step',
             f'{spec.step}',
@@ -50,7 +51,7 @@ def get_asset_command(spec, config):
             ]
 
 
-def get_output(spec, config):
+def get_output(spec: AssetSpec, config: DagRunConfig) -> pd.DataFrame | bool:
     if spec.output is None:
         return True
     prefix = f'{config.data_date}_{config.player}_{config.perf_type}'
@@ -152,14 +153,14 @@ loader_specs: list[LoaderAssetSpec] = [
                     table='win_probs',
                     ),
     ]
-loader_assets = [make_data_loader(spec=spec,
+loader_assets = [make_data_loader(loader_spec=spec,
                                   config_type=DagRunConfig,
                                   get_command=get_asset_command,
                                   )
                  for spec in loader_specs]
 
 
-ASSETS: list[Asset] = data_assets + loader_assets
+ASSETS: list[AssetsDefinition] = data_assets + loader_assets
 SPECS: list[AssetSpec | LoaderAssetSpec] = data_specs + loader_specs
 
 
@@ -168,31 +169,34 @@ SPECS: list[AssetSpec | LoaderAssetSpec] = data_specs + loader_specs
     job=all_assets_job,
     execution_timezone='America/Chicago',
 )
-def lichess_etl_schedule(context) -> Iterator[RunRequest]:
-    date = context.scheduled_execution_time.strftime('%Y-%m-%d')
+def lichess_etl_schedule(context: ScheduleEvaluationContext,
+                         ) -> Iterator[RunRequest]:
+    date: str = context.scheduled_execution_time.strftime('%Y-%m-%d')
 
-    players = (['athena-pallada']
-               if os.getenv('TESTING')
-               else ['Grahtbo', 'siddhartha13'])
-    perf_types = ['blitz'] if os.getenv('TESTING') else ['bullet', 'blitz']
+    players: list[str] = (['athena-pallada']
+                          if os.getenv('TESTING')
+                          else ['Grahtbo', 'siddhartha13'])
+    perf_types: list[str] = (['blitz']
+                             if os.getenv('TESTING')
+                             else ['bullet', 'blitz'])
 
     for player, perf_type in itertools.product(players, perf_types):
-        config = {'player': player,
-                  'perf_type': perf_type,
-                  'data_date': date,
-                  'local_stockfish': True,
-                  }
+        config: dict[str, str | bool] = {'player': player,
+                                         'perf_type': perf_type,
+                                         'data_date': date,
+                                         'local_stockfish': True,
+                                         }
         get_dagster_logger().info(f'Requesting run for {config=}')
-        cfg = DagRunConfig(**config)
-        run_config = RunConfig(ops={spec.name: cfg for spec in SPECS})
+        cfg: DagRunConfig = DagRunConfig(**config)
+        run_config: RunConfig = RunConfig(ops={spec.name: cfg
+                                               for spec in SPECS})
 
         yield RunRequest(run_key=f'{date}_{player}_{perf_type}',
                          run_config=run_config,
                          )
 
 
-defs = Definitions(
-    assets=ASSETS,
-    jobs=[all_assets_job],
-    schedules=[lichess_etl_schedule],
-)
+defs = Definitions(assets=ASSETS,
+                   jobs=[all_assets_job],
+                   schedules=[lichess_etl_schedule],
+                   )

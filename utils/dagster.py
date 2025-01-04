@@ -9,6 +9,7 @@ from typing import Any, Protocol
 import pandas as pd
 from dagster import (
     AssetExecutionContext,
+    AssetsDefinition,
     Backoff,
     Config,
     Jitter,
@@ -27,7 +28,7 @@ class GenericAssetSpec:
     """
 
     name: str
-    deps: list[Asset]
+    deps: list[str]
 
 
 @dataclass
@@ -81,7 +82,7 @@ def make_asset(spec: GenericAssetSpec,
                config_type: type[Config],
                get_command: SpecHandler,
                get_output: SpecHandler = _no_output,
-               ) -> Asset:
+               ) -> AssetsDefinition:
     # TODO: metadata/tags
     # TODO: add partition key definition
     @asset(name=spec.name,
@@ -114,15 +115,15 @@ def make_asset(spec: GenericAssetSpec,
     return asset_fn
 
 
-def make_data_loader(spec: LoaderAssetSpec,
+def make_data_loader(loader_spec: LoaderAssetSpec,
                      config_type: type[Config],
                      get_command: SpecHandler,
-                     ) -> Asset:
-    spec = AssetSpec(name=spec.name,
-                     deps=spec.deps,
-                     step=f'load_{spec.table}',
-                     output=None,
-                     )
+                     ) -> AssetsDefinition:
+    spec: AssetSpec = AssetSpec(name=loader_spec.name,
+                                deps=loader_spec.deps,
+                                step=f'load_{loader_spec.table}',
+                                output=None,
+                                )
     return make_asset(spec=spec,
                       config_type=config_type,
                       get_command=get_command,
