@@ -3,42 +3,27 @@ DAG declarations for lichess ETL.
 """
 
 import itertools
-from collections.abc import Callable, Iterator
-from dataclasses import dataclass
+import os
+from collections.abc import Iterator
 
 import pandas as pd
 from dagster import (
-    AssetExecutionContext,
-    Backoff,
     Config,
     Definitions,
-    Jitter,
-    RetryPolicy,
     RunConfig,
     RunRequest,
-    asset,  # type: ignore
     define_asset_job,  # type: ignore
     get_dagster_logger,
     schedule,
 )
-from dagster_docker import execute_docker_container
 
-Asset = Callable[[AssetExecutionContext], pd.DataFrame | bool]
-
-
-@dataclass
-class AssetSpec:
-    name: str
-    deps: list[Asset]
-    step: str
-    output: str | None
-
-
-@dataclass
-class LoaderAssetSpec:
-    name: str
-    deps: list[Asset]
-    table: str
+from utils.dagster import (
+    Asset,
+    AssetSpec,
+    LoaderAssetSpec,
+    make_asset,
+    make_data_loader,
+)
 
 
 class DagRunConfig(Config):
@@ -51,70 +36,26 @@ class DagRunConfig(Config):
 all_assets_job = define_asset_job(name='all_assets_job')
 
 
-env_vars = {'DAGSTER_IO_DIR': '/io/'}
-
-volumes_to_mount = {'/mnt/dagster_io/':
-                    {'bind': env_vars['DAGSTER_IO_DIR'],
-                     'mode': 'rw',
-                     },
-                    }
-
-
-def make_asset(spec: AssetSpec) -> Asset:
-    # TODO: metadata/tags
-    @asset(name=spec.name,
-           deps=spec.deps,
-           code_version='1',
-           retry_policy=RetryPolicy(max_retries=3,
-                                    delay=0.2,
-                                    backoff=Backoff.EXPONENTIAL,
-                                    jitter=Jitter.PLUS_MINUS,
-                                    ),
-           )
-    def asset_fn(context: AssetExecutionContext,
-                 config: DagRunConfig,
-                 ):  # -> pd.DataFrame | bool:  # TODO add typing
-        context.log.info(f'My run ID is {context.run.run_id}')
-        context.log.info(f'{config=}')
-        execute_docker_container(context=context,  # type: ignore
-                                 image='chess-pipeline',
-                                 entrypoint='python',
-                                 command=['/app/docker_entrypoint.py',
-                                          '--step',
-                                          f'{spec.step}',
-                                          '--player',
-                                          f'{config.player}',
-                                          '--perf_type',
-                                          f'{config.perf_type}',
-                                          '--data_date',
-                                          f'{config.data_date}',
-                                          '--local_stockfish'
-                                          if config.local_stockfish
-                                          else '',
-                                          ],
-                                 networks=['mainnetwork'],
-                                 # dagster expects env vars like NAME=value
-                                 env_vars=[f'{k}={v}'
-                                           for k, v in env_vars.items()],
-                                 container_kwargs={'volumes': volumes_to_mount,
-                                                   'auto_remove': True,
-                                                   },
-                                 )
-        if spec.output is None:
-            return True
-        prefix = f'{config.data_date}_{config.player}_{config.perf_type}'
-        df = pd.read_parquet(f'/mnt/dagster_io/{prefix}_{spec.output}.parquet')
-        return df
-    return asset_fn
+def get_asset_command(spec, config):
+    return ['/app/docker_entrypoint.py',
+            '--step',
+            f'{spec.step}',
+            '--player',
+            f'{config.player}',
+            '--perf_type',
+            f'{config.perf_type}',
+            '--data_date',
+            f'{config.data_date}',
+            '--local_stockfish' if config.local_stockfish else '',
+            ]
 
 
-def make_data_loader(loader_spec: LoaderAssetSpec) -> Asset:
-    spec = AssetSpec(name=loader_spec.name,
-                     deps=loader_spec.deps,
-                     step=f'load_{loader_spec.table}',
-                     output=None,
-                     )
-    return make_asset(spec)
+def get_output(spec, config):
+    if spec.output is None:
+        return True
+    prefix = f'{config.data_date}_{config.player}_{config.perf_type}'
+    df = pd.read_parquet(f'/mnt/dagster_io/{prefix}_{spec.output}.parquet')
+    return df
 
 
 data_specs: list[AssetSpec] = [
@@ -174,7 +115,12 @@ data_specs: list[AssetSpec] = [
               ),
     ]
 
-data_assets = [make_asset(spec) for spec in data_specs]
+data_assets = [make_asset(spec=spec,
+                          config_type=DagRunConfig,
+                          get_command=get_asset_command,
+                          get_output=get_output,
+                          )
+               for spec in data_specs]
 
 loader_specs: list[LoaderAssetSpec] = [
     LoaderAssetSpec(name='load_games',
@@ -206,7 +152,11 @@ loader_specs: list[LoaderAssetSpec] = [
                     table='win_probs',
                     ),
     ]
-loader_assets = [make_data_loader(spec) for spec in loader_specs]
+loader_assets = [make_data_loader(spec=spec,
+                                  config_type=DagRunConfig,
+                                  get_command=get_asset_command,
+                                  )
+                 for spec in loader_specs]
 
 
 ASSETS: list[Asset] = data_assets + loader_assets
@@ -214,15 +164,17 @@ SPECS: list[AssetSpec | LoaderAssetSpec] = data_specs + loader_specs
 
 
 @schedule(
-    cron_schedule='*/5 * * * *',
+    cron_schedule='* * * * *' if os.getenv('TESTING') else '0 1 * * *',
     job=all_assets_job,
     execution_timezone='America/Chicago',
 )
-def every_5min(context) -> Iterator[RunRequest]:
+def lichess_etl_schedule(context) -> Iterator[RunRequest]:
     date = context.scheduled_execution_time.strftime('%Y-%m-%d')
 
-    players = ['Grahtbo', 'siddhartha13']
-    perf_types = ['bullet', 'blitz']
+    players = (['athena-pallada']
+               if os.getenv('TESTING')
+               else ['Grahtbo', 'siddhartha13'])
+    perf_types = ['blitz'] if os.getenv('TESTING') else ['bullet', 'blitz']
 
     for player, perf_type in itertools.product(players, perf_types):
         config = {'player': player,
@@ -242,5 +194,5 @@ def every_5min(context) -> Iterator[RunRequest]:
 defs = Definitions(
     assets=ASSETS,
     jobs=[all_assets_job],
-    schedules=[every_5min],
+    schedules=[lichess_etl_schedule],
 )

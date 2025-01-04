@@ -38,6 +38,8 @@ ARG INSTALL_GROUPS="main"
 RUN $POETRY_HOME/bin/poetry install --with $INSTALL_GROUPS --no-root --no-ansi --no-cache \
     && $POETRY_HOME/bin/poetry cache clear pypi --all
 
+COPY utils/ /app/utils/
+
 COPY dagster.yaml /app
 COPY workspace.yaml /app
 RUN mkdir -p /dagster/artifacts
