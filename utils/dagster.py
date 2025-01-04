@@ -65,8 +65,8 @@ class SpecHandler(Protocol):
 
     # TODO: remove Any
     def __call__(self,
-                 spec: GenericAssetSpec,
-                 config: Config,
+                 spec: Any,
+                 config: Any,
                  ) -> Any:
         ...
 
@@ -78,8 +78,9 @@ def _no_output(spec: GenericAssetSpec, config: Config) -> None:
     return None
 
 
-def make_asset(spec: GenericAssetSpec,
-               config_type: type[Config],
+# TODO: fix typing
+def make_asset(spec: Any,
+               config_type: Any,
                get_command: SpecHandler,
                get_output: SpecHandler = _no_output,
                ) -> AssetsDefinition:
@@ -95,8 +96,8 @@ def make_asset(spec: GenericAssetSpec,
                                     ),
            )
     def asset_fn(context: AssetExecutionContext,
-                 config: config_type,
-                 ) -> Any:  # TODO add typing
+                 config: Any,
+                 ) -> Any:
         context.log.info(f'My run ID is {context.run.run_id}')
         context.log.info(f'{config=}')
         execute_docker_container(context=context,  # type: ignore

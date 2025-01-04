@@ -187,7 +187,7 @@ def lichess_etl_schedule(context: ScheduleEvaluationContext,
                                          'local_stockfish': True,
                                          }
         get_dagster_logger().info(f'Requesting run for {config=}')
-        cfg: DagRunConfig = DagRunConfig(**config)
+        cfg: DagRunConfig = DagRunConfig(**config)  # type: ignore
         run_config: RunConfig = RunConfig(ops={spec.name: cfg
                                                for spec in SPECS})
 
