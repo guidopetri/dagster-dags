@@ -48,6 +48,8 @@ env_vars: dict[str, str] = {'DAGSTER_IO_DIR': '/io/'}
 DEFAULT_CONFIG_PATH: str = '/home/users/loki/data/chess_pipeline/config/'
 CONFIG_PATH: str = os.getenv('CHESS_PIPELINE_CONFIG_PATH',
                              DEFAULT_CONFIG_PATH)
+CHESS_PIPELINE_IMAGE: str = ('ghcr.io/guidopetri/chess-pipeline-dagster'
+                             ':docker-entrypoint')
 
 volumes_to_mount = {'/mnt/dagster_io/':
                     {'bind': env_vars['DAGSTER_IO_DIR'],
@@ -110,7 +112,7 @@ def make_asset[AssetSpecSubclass: GenericAssetSpec,
         context.log.info(f'My run ID is {context.run.run_id}')
         context.log.info(f'{config=}')
         execute_docker_container(context=context,  # type: ignore
-                                 image='chess-pipeline',
+                                 image=CHESS_PIPELINE_IMAGE,
                                  entrypoint='python',
                                  command=get_command(spec=spec, config=config),
                                  networks=['main-network'],
