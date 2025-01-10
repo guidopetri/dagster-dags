@@ -10,12 +10,14 @@ import pandas as pd
 from dagster import (
     AssetsDefinition,
     Config,
+    DefaultSensorStatus,
     Definitions,
     RunConfig,
     RunRequest,
     ScheduleEvaluationContext,
     define_asset_job,  # type: ignore
     get_dagster_logger,
+    make_email_on_run_failure_sensor,
     schedule,  # type: ignore
 )
 
@@ -196,7 +198,18 @@ def lichess_etl_schedule(context: ScheduleEvaluationContext,
                          )
 
 
+email_on_run_failure = make_email_on_run_failure_sensor(
+    email_from=os.getenv('EMAIL_SENDER', ''),
+    smtp_user='apikey',
+    smtp_host='smtp.sendgrid.net',
+    email_password=os.getenv('EMAIL_SENDGRID_API_KEY', ''),
+    email_to=[os.getenv('EMAIL_FAILURE_TARGET', '')],
+    default_status=DefaultSensorStatus.RUNNING,
+)
+
+# todo: can i use docker_executor here?
 defs = Definitions(assets=ASSETS,
                    jobs=[all_assets_job],
                    schedules=[lichess_etl_schedule],
+                   sensors=[email_on_run_failure],
                    )
