@@ -105,6 +105,7 @@ def make_asset[AssetSpecSubclass: GenericAssetSpec,
                                     backoff=Backoff.EXPONENTIAL,
                                     jitter=Jitter.PLUS_MINUS,
                                     ),
+           op_tags={'dagster/concurrency_key': 'global'},
            )
     def asset_fn(context: AssetExecutionContext,
                  config: config_type,
